@@ -1,0 +1,571 @@
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+This workbook contains census data on different population demographics for Champaign, Illinois. I analyzed trends at the city, county, and regional levels to gain a better understanding of population dynamics and conditions in the area. This analysis was guided by instructions and examples from UP494: Neighborhood Analysis.
+
+
+```{r}
+library(blogdown)
+library(tidycensus)
+library(tidyverse)
+```
+
+First, I created an object for the population by race for all places in Illinois.
+
+```{r error=FALSE, message=FALSE}
+place_race_2017<-get_acs(geography = "place", state = "Illinois", table = "B02001", year=2017, survey="acs5", output="wide")
+
+place_race_2017
+```
+
+Next, I repeated the process for counties in Illinois.
+
+```{r error=FALSE, message=FALSE}
+county_race_2017<-get_acs(geography = "county", state = "IL", table = "B02001", year=2017, survey="acs5", output="wide")
+
+county_race_2017
+```
+
+Here, I altered the initial call for the data by including only the variables that were most relevant for creating a concise summary of racial demographics.
+
+```{r error=FALSE, message=FALSE}
+place_race_2017<-get_acs(geography = "place", state = "IL", variables = c("B02001_001", "B02001_002", "B02001_003"), year=2017, survey="acs5", output="wide")
+
+place_race_2017
+```
+
+After filtering the data for Champaign, renaming variables and removing the rows I didn't need, I was left with a breakdown of Champaign's population by race.
+
+```{r}
+place_race_2017 %>% 
+  filter(NAME == "Champaign city, Illinois") %>% 
+  mutate(pop_other = B02001_001E-(B02001_002E + B02001_003E)) %>% 
+  rename(pop_tot = B02001_001E, pop_white = B02001_002E, pop_black = B02001_003E) %>% 
+  select(NAME, pop_tot, pop_white, pop_black, pop_other)
+```
+
+This step rearranged the rows for the overall race breakdown by place into alphabetical order using the `arrange()` command.
+
+```{r}
+place_race_2017 %>% arrange(NAME)
+```
+
+Here, I used the `desc()` command to reverse the alphabetical order of row entries for the data.
+
+```{r}
+place_race_2017 %>% arrange(desc(NAME))
+```
+
+This step uses `str_detect()` as an alternative way to search for data on Champaign:
+```{r}
+place_race_2017 %>% filter(str_detect(NAME, "Champaign"))
+```
+
+This step presents an improved, organized version of the Champaign race data.
+```{r}
+place_race_2017 %>% 
+  filter(NAME == "Champaign city, Illinois") %>% 
+  mutate(pop_other = B02001_001E-(B02001_002E + B02001_003E)) %>% 
+  rename(pop_tot = B02001_001E, pop_white = B02001_002E, pop_black = B02001_003E) %>% 
+  select(NAME, pop_tot, pop_white, pop_black, pop_other)
+```
+
+Because the population of the "pop_other" category was so high, I redownloaded the dataset to see if there were additional groups I could separate the data into.
+
+```{r}
+place_race_2017<-get_acs(geography = "place", state = "IL", table = "B02001", year=2017, survey="acs5", output="wide")
+
+place_race_2017 %>% filter(NAME == "Champaign city, Illinois")
+```
+
+This lead to adding an additional category for Asian residents in Champaign based on their sizeable population.
+
+```{r}
+place_race_2017 %>% 
+  filter(NAME == "Champaign city, Illinois") %>% 
+  mutate(pop_other = B02001_001E-(B02001_002E + B02001_003E+ B02001_005E)) %>% 
+  rename(pop_tot = B02001_001E, pop_white = B02001_002E, pop_black = B02001_003E, pop_asian = B02001_005E) %>% 
+  select(NAME, pop_tot, pop_white, pop_black, pop_asian, pop_other)
+
+```
+
+I then added this group into the Champaign race object.
+
+```{r}
+place_race_2017<-place_race_2017 %>% 
+  filter(NAME == "Champaign city, Illinois") %>% 
+  mutate(pop_other = B02001_001E-(B02001_002E + B02001_003E+ B02001_005E)) %>% 
+  rename(pop_tot = B02001_001E, pop_white = B02001_002E, pop_black = B02001_003E, pop_asian = B02001_005E) %>% 
+  select(NAME, pop_tot, pop_white, pop_black, pop_asian, pop_other)
+place_race_2017
+```
+
+After completing that process, I repeated it for Champaign County as well. 
+
+```{r}
+county_race_2017 <- county_race_2017 %>% 
+  mutate(pop_other = B02001_001E-(B02001_002E+B02001_003E+B02001_005E)) %>% 
+  rename(pop_tot = B02001_001E, pop_white = B02001_002E, pop_black = B02001_003E, pop_asian = B02001_005E) %>% 
+  select(NAME, pop_tot, pop_white, pop_black, pop_asian, pop_other)
+county_race_2017 <- county_race_2017 %>% filter(str_detect(NAME, "Champaign"))
+county_race_2017
+```
+
+I then worked on adding population percentages to both the place and county breakdowns.
+
+```{r}
+place_race_2017 <- place_race_2017 %>% 
+  mutate(
+    p_white = (pop_white/pop_tot)*100,
+    p_black = (pop_black/pop_tot)*100,
+    p_asian = (pop_asian/pop_tot)*100,
+    p_other = (pop_other/pop_tot)*100
+  )
+```
+
+```{r}
+county_race_2017 <- county_race_2017 %>% 
+  mutate(
+    p_white = (pop_white/pop_tot)*100,
+    p_black = (pop_black/pop_tot)*100,
+    p_asian = (pop_asian/pop_tot)*100,
+    p_other = (pop_other/pop_tot)*100
+  )
+```
+
+After that, I bound both the place and county data into one object.
+
+```{r}
+race_2017<-bind_rows(place_race_2017, county_race_2017)
+race_2017
+```
+
+The below chunk shows the population numbers for these geographic areas.
+
+```{r}
+race_2017 %>% select(NAME, pop_white, pop_black, pop_asian, pop_tot)
+```
+
+The below chunk shows the population percentages for these geographic areas.
+
+```{r}
+race_2017 %>% select(NAME, p_white, p_black, p_asian, p_other)
+```
+
+Next, I repeated the entire process again for the Champaign region, which includes the counties of Champaign, Ford, and Piatt.
+
+```{r}
+region_race_2017<- get_acs(geography = "county", state = "IL", table = "B02001", year=2017, survey="acs5", output="wide") %>% 
+  filter(NAME %in% c("Champaign County, Illinois", "Ford County, Illinois", "Piatt County, Illinois")) %>% 
+  summarise(B02001_001E = sum(B02001_001E),
+            B02001_002E = sum(B02001_002E),
+            B02001_003E = sum(B02001_003E),
+            B02001_005E = sum(B02001_005E)) %>% 
+  mutate(NAME = "Region")%>% 
+  mutate(pop_other = B02001_001E-(B02001_002E + B02001_003E+ B02001_005E)) %>% 
+  rename(pop_tot = B02001_001E, pop_white = B02001_002E, pop_black = B02001_003E, pop_asian = B02001_005E) %>% 
+  select(NAME, pop_tot, pop_white, pop_black, pop_asian, pop_other) %>% 
+  mutate(
+  p_white = (pop_white / pop_tot)*100,
+  p_black = (pop_black / pop_tot)*100,
+  p_asian = (pop_asian / pop_tot)*100,
+  p_other = (pop_other / pop_tot)*100)
+region_race_2017
+```
+
+I also added the regional numbers into the combined city and county object.
+
+```{r}
+race_2017<-bind_rows(race_2017, region_race_2017)
+race_2017
+```
+
+Next, I created a similar table that reflects Latino ethnicity for Champaign at the city level.
+
+```{r}
+place_latino_2017 <- get_acs(geography = "place", table = "B03002", year = 2017, state = "Illinois", survey = "acs5", output = "wide")
+
+region_latino_2017 <- get_acs(geography = "county", table = "B03002", year = 2017, state = "IL", survey = "acs5", output = "wide")
+
+place_latino_2017 <- place_latino_2017 %>% 
+  filter(str_detect(NAME, "Champaign")) %>%
+  mutate(latino_other = B03002_012E - (B03002_013E+B03002_014E)) %>% 
+  rename(latino_tot = B03002_012E, latino_white = B03002_013E, latino_black = B03002_014E) %>% 
+    select(NAME, latino_tot, latino_white, latino_black, latino_other)
+place_latino_2017
+
+region_latino_2017 <- region_latino_2017 %>% 
+  filter(str_detect(NAME, "Champaign")) %>%
+  mutate(latino_other = B03002_012E - (B03002_013E+B03002_014E)) %>% 
+  rename(latino_tot = B03002_012E, latino_white = B03002_013E, latino_black = B03002_014E) %>% 
+    select(NAME, latino_tot, latino_white, latino_black, latino_other)
+place_latino_2017
+
+latino_2017 <- bind_rows(place_latino_2017, region_latino_2017)
+```
+
+The next Census table I dealt with showed population by age.
+
+```{r}
+place_age_2017 <- get_acs(geography = "place", table = "B01001", year = 2017, state = "Illinois", survey = "acs5", output = "tidy")
+
+place_age_2017
+```
+
+I first queried the data for Champaign.
+
+```{r}
+place_age_2017 <- place_age_2017 %>% 
+  filter(str_detect(NAME, "Champaign"))
+place_age_2017
+```
+
+Next, I used the `str_replace()` function to remove the summary rows from the data to make analysis easier. I also removed the table name from each entry, leaving only the specific indicator for each variable.
+
+```{r}
+place_age_2017<-place_age_2017 %>% 
+  mutate(variable = str_replace(variable, "B01001_0", "")) %>% filter(!variable %in% c("01", "02", "26"))
+
+place_age_2017
+```
+
+Next, I used the `case_when()` command to recode the data and make the variables more readable.
+
+```{r}
+?case_when
+place_age_2017<-place_age_2017 %>% 
+  mutate(variable_cat = case_when(
+    variable == "03" ~ "19 and Below", 
+    variable == "04" ~ "19 and Below", 
+    variable == "05" ~ "19 and Below",
+    variable == "06" ~ "19 and Below",
+    variable == "07" ~ "19 and Below",
+    variable == "08" ~ "20 to 44",
+    variable == "09" ~ "20 to 44",
+    variable == "10" ~ "20 to 44",
+    variable == "11" ~ "20 to 44",
+    variable == "12" ~ "20 to 44",
+    variable == "13" ~ "20 to 44",
+    variable == "14" ~ "20 to 44",
+    variable == "15" ~ "45 to 64",
+    variable == "16" ~ "45 to 64",
+    variable == "17" ~ "45 to 64",
+    variable == "18" ~ "45 to 64",
+    variable == "19" ~ "65 and Above",
+    variable == "20" ~ "65 and Above",
+    variable == "21" ~ "65 and Above",
+    variable == "22" ~ "65 and Above",
+    variable == "23" ~ "65 and Above",
+    variable == "24" ~ "65 and Above",
+    variable == "25" ~ "65 and Above",
+    variable == "27" ~ "19 and Below",
+    variable == "28" ~ "19 and Below",
+    variable == "29" ~ "19 and Below",
+    variable == "30" ~ "19 and Below",
+    variable == "31" ~ "19 and Below",
+    variable == "32" ~ "20 to 44",
+    variable == "33" ~ "20 to 44",
+    variable == "34" ~ "20 to 44",
+    variable == "35" ~ "20 to 44",
+    variable == "36" ~ "20 to 44",
+    variable == "37" ~ "20 to 44",
+    variable == "38" ~ "20 to 44",
+    variable == "39" ~ "45 to 64",
+    variable == "40" ~ "45 to 64",
+    variable == "41" ~ "45 to 64",
+    variable == "42" ~ "45 to 64",
+    variable == "43" ~ "45 to 64",
+    variable == "44" ~ "65 and Above", 
+    variable == "45" ~ "65 and Above",
+    variable == "46" ~ "65 and Above",
+    variable == "47" ~ "65 and Above",
+    variable == "48" ~ "65 and Above",
+    variable == "49" ~ "65 and Above"
+    )
+  )
+
+place_age_2017
+```
+
+Next, I grouped the data by the recoded variables and summarized the values for each age category.
+
+```{r}
+place_age_2017<-place_age_2017 %>% 
+  group_by(variable_cat) %>% 
+  summarise(age=sum(estimate))
+
+place_age_2017
+```
+
+I then repeated the process for the county and region as well.
+
+```{r}
+counties_age_2017 <- get_acs(geography = "county", table = "B01001", year = 2017, state = "Illinois", survey = "acs5", output = "tidy")
+
+counties_age_2017 <- counties_age_2017 %>%
+  filter(str_detect(NAME, "Champaign")) %>% 
+  mutate(variable = str_replace(variable, "B01001_0", "")) %>% 
+  filter(!variable %in% c("01", "02", "26")) %>%
+  mutate(variable_cat = case_when(
+    variable == "03" ~ "19 and Below", 
+    variable == "04" ~ "19 and Below", 
+    variable == "05" ~ "19 and Below",
+    variable == "06" ~ "19 and Below",
+    variable == "07" ~ "19 and Below",
+    variable == "08" ~ "20 to 44",
+    variable == "09" ~ "20 to 44",
+    variable == "10" ~ "20 to 44",
+    variable == "11" ~ "20 to 44",
+    variable == "12" ~ "20 to 44",
+    variable == "13" ~ "20 to 44",
+    variable == "14" ~ "20 to 44",
+    variable == "15" ~ "45 to 64",
+    variable == "16" ~ "45 to 64",
+    variable == "17" ~ "45 to 64",
+    variable == "18" ~ "45 to 64",
+    variable == "19" ~ "65 and Above",
+    variable == "20" ~ "65 and Above",
+    variable == "21" ~ "65 and Above",
+    variable == "22" ~ "65 and Above",
+    variable == "23" ~ "65 and Above",
+    variable == "24" ~ "65 and Above",
+    variable == "25" ~ "65 and Above",
+    variable == "27" ~ "19 and Below",
+    variable == "28" ~ "19 and Below",
+    variable == "29" ~ "19 and Below",
+    variable == "30" ~ "19 and Below",
+    variable == "31" ~ "19 and Below",
+    variable == "32" ~ "20 to 44",
+    variable == "33" ~ "20 to 44",
+    variable == "34" ~ "20 to 44",
+    variable == "35" ~ "20 to 44",
+    variable == "36" ~ "20 to 44",
+    variable == "37" ~ "20 to 44",
+    variable == "38" ~ "20 to 44",
+    variable == "39" ~ "45 to 64",
+    variable == "40" ~ "45 to 64",
+    variable == "41" ~ "45 to 64",
+    variable == "42" ~ "45 to 64",
+    variable == "43" ~ "45 to 64",
+    variable == "44" ~ "65 and Above", 
+    variable == "45" ~ "65 and Above",
+    variable == "46" ~ "65 and Above",
+    variable == "47" ~ "65 and Above",
+    variable == "48" ~ "65 and Above",
+    variable == "49" ~ "65 and Above")
+    ) %>% 
+  group_by(variable_cat) %>% 
+  summarise(age=sum(estimate))
+  
+counties_age_2017
+
+```
+
+```{r}
+region_age_2017 <- get_acs(geography = "county", table = "B01001", year = 2017, state = "Illinois", survey = "acs5", output = "tidy" ) %>% 
+  filter(NAME %in% c("Champaign County, Illinois", "Ford County, Illinois", "Piatt County, Illinois")) %>% 
+  mutate(variable = str_replace(variable, "B01001_0", "")) %>% 
+  filter(!variable %in% c("01", "02", "26")) %>%
+  mutate(variable_cat = case_when(
+    variable == "03" ~ "19 and Below", 
+    variable == "04" ~ "19 and Below", 
+    variable == "05" ~ "19 and Below",
+    variable == "06" ~ "19 and Below",
+    variable == "07" ~ "19 and Below",
+    variable == "08" ~ "20 to 44",
+    variable == "09" ~ "20 to 44",
+    variable == "10" ~ "20 to 44",
+    variable == "11" ~ "20 to 44",
+    variable == "12" ~ "20 to 44",
+    variable == "13" ~ "20 to 44",
+    variable == "14" ~ "20 to 44",
+    variable == "15" ~ "45 to 64",
+    variable == "16" ~ "45 to 64",
+    variable == "17" ~ "45 to 64",
+    variable == "18" ~ "45 to 64",
+    variable == "19" ~ "65 and Above",
+    variable == "20" ~ "65 and Above",
+    variable == "21" ~ "65 and Above",
+    variable == "22" ~ "65 and Above",
+    variable == "23" ~ "65 and Above",
+    variable == "24" ~ "65 and Above",
+    variable == "25" ~ "65 and Above",
+    variable == "27" ~ "19 and Below",
+    variable == "28" ~ "19 and Below",
+    variable == "29" ~ "19 and Below",
+    variable == "30" ~ "19 and Below",
+    variable == "31" ~ "19 and Below",
+    variable == "32" ~ "20 to 44",
+    variable == "33" ~ "20 to 44",
+    variable == "34" ~ "20 to 44",
+    variable == "35" ~ "20 to 44",
+    variable == "36" ~ "20 to 44",
+    variable == "37" ~ "20 to 44",
+    variable == "38" ~ "20 to 44",
+    variable == "39" ~ "45 to 64",
+    variable == "40" ~ "45 to 64",
+    variable == "41" ~ "45 to 64",
+    variable == "42" ~ "45 to 64",
+    variable == "43" ~ "45 to 64",
+    variable == "44" ~ "65 and Above", 
+    variable == "45" ~ "65 and Above",
+    variable == "46" ~ "65 and Above",
+    variable == "47" ~ "65 and Above",
+    variable == "48" ~ "65 and Above",
+    variable == "49" ~ "65 and Above")
+    ) %>% 
+  group_by(variable_cat) %>% 
+  summarise(age=sum(estimate))
+
+region_age_2017
+
+```
+
+Next, I used `bind_cols()`to combine the tables.
+
+```{r}
+bind_cols(place_age_2017, counties_age_2017, region_age_2017)
+```
+
+The `select()` command allowed me to choose only the variables that I wanted to include in the table.
+
+```{r}
+age_2017<-bind_cols(place_age_2017, counties_age_2017, region_age_2017) %>% 
+  select(Age = variable_cat...1, Place = age...2, County = age...4, Region = age...6) 
+
+age_2017
+```
+
+Next, I calculated percentages for each geographical area.
+
+```{r}
+age_2017<-age_2017 %>% 
+  mutate(p_Place = (Place / sum(Place))*100,
+         p_County = (County / sum(County))*100,
+         p_Region = (Region / sum(Region))*100,
+         )
+
+age_2017
+```
+
+After completing the race and age tables, I decided to take a look at poverty in Champaign and repeat the analysis for that data.
+
+The below table shows poverty for the City of Champaign.
+
+```{r}
+
+place_poverty_2017 <- get_acs(geography = "place", state = "Illinois", table = "B17001", year = 2017, survey = "acs5", output = "wide")
+
+place_poverty_2017 <- place_poverty_2017 %>% 
+  filter(str_detect(NAME, "Champaign")) %>% 
+  mutate(
+    tot_pop = B17001_001E,
+    tot_below_poverty = B17001_002E,
+    male_below_poverty = B17001_003E,
+    female_below_poverty = B17001_017E,
+    tot_above_poverty = B17001_031E,
+    male_above_poverty = B17001_032E,
+    female_above_poverty = B17001_046E
+  ) %>% 
+  select(NAME, tot_pop, tot_below_poverty, male_below_poverty, female_below_poverty, tot_above_poverty, male_above_poverty, female_above_poverty)
+  
+place_poverty_2017 <- place_poverty_2017 %>% 
+  mutate(
+    p_below_poverty = (tot_below_poverty/tot_pop)*100,
+    p_above_poverty = (tot_above_poverty/tot_pop)*100,
+    p_male_below_poverty = (male_below_poverty/tot_below_poverty),
+    p_female_below_poverty = (female_below_poverty/tot_below_poverty)*100,
+    p_male_above_poverty = (male_above_poverty/tot_above_poverty)*100,
+    p_female_above_poverty = (female_above_poverty/tot_above_poverty)*100
+  )
+
+place_poverty_2017
+  
+```
+
+The below table shows poverty for Champaign County.
+
+```{r}
+county_poverty_2017 <- get_acs(geography = "county", state = "Illinois", table = "B17001", year = 2017, survey = "acs5", output = "wide")
+
+county_poverty_2017 <- county_poverty_2017 %>% 
+  filter(str_detect(NAME, "Champaign")) %>% 
+  mutate(
+    tot_pop = B17001_001E,
+    tot_below_poverty = B17001_002E,
+    male_below_poverty = B17001_003E,
+    female_below_poverty = B17001_017E,
+    tot_above_poverty = B17001_031E,
+    male_above_poverty = B17001_032E,
+    female_above_poverty = B17001_046E
+  ) %>% 
+  select(NAME, tot_pop, tot_below_poverty, male_below_poverty, female_below_poverty, tot_above_poverty, male_above_poverty, female_above_poverty)
+  
+county_poverty_2017 <- county_poverty_2017 %>% 
+  mutate(
+    p_below_poverty = (tot_below_poverty/tot_pop)*100,
+    p_above_poverty = (tot_above_poverty/tot_pop)*100,
+    p_male_below_poverty = (male_below_poverty/tot_below_poverty),
+    p_female_below_poverty = (female_below_poverty/tot_below_poverty)*100,
+    p_male_above_poverty = (male_above_poverty/tot_above_poverty)*100,
+    p_female_above_poverty = (female_above_poverty/tot_above_poverty)*100
+  )
+
+county_poverty_2017
+```
+
+The below table shows poverty for the Champaign region.
+
+```{r}
+region_poverty_2017 <- get_acs(geography = "county", state = "Illinois", table = "B17001", year = 2017, survey = "acs5", output = "wide")
+
+region_poverty_2017 <- region_poverty_2017 %>% 
+  filter(NAME %in% c("Champaign County, Illinois", "Ford County, Illinois", "Piatt County, Illinois")) %>% 
+  summarise(
+    B17001_001E = sum(B17001_001E),
+    B17001_002E = sum(B17001_002E),
+    B17001_003E = sum(B17001_003E),
+    B17001_017E = sum(B17001_017E),
+    B17001_031E = sum(B17001_031E),
+    B17001_032E = sum(B17001_032E),
+    B17001_046E = sum(B17001_046E)
+  ) %>% 
+  mutate(
+    NAME = "Champaign Region",
+    tot_pop = B17001_001E,
+    tot_below_poverty = B17001_002E,
+    male_below_poverty = B17001_003E,
+    female_below_poverty = B17001_017E,
+    tot_above_poverty = B17001_031E,
+    male_above_poverty = B17001_032E,
+    female_above_poverty = B17001_046E
+  ) %>% 
+  select(NAME, tot_pop, tot_below_poverty, male_below_poverty, female_below_poverty, tot_above_poverty, male_above_poverty, female_above_poverty)
+  
+region_poverty_2017 <- region_poverty_2017 %>% 
+  mutate(
+    p_below_poverty = (tot_below_poverty/tot_pop)*100,
+    p_above_poverty = (tot_above_poverty/tot_pop)*100,
+    p_male_below_poverty = (male_below_poverty/tot_below_poverty),
+    p_female_below_poverty = (female_below_poverty/tot_below_poverty)*100,
+    p_male_above_poverty = (male_above_poverty/tot_above_poverty)*100,
+    p_female_above_poverty = (female_above_poverty/tot_above_poverty)*100
+  )
+
+region_poverty_2017
+```
+
+Here, I bound the individual tables into one summary table. Poverty numbers are shown first, then percentages.
+
+```{r}
+champaign_poverty_2017 <- bind_rows(place_poverty_2017, county_poverty_2017, region_poverty_2017)
+
+champaign_poverty_2017
+```
+
+### What do these indicators help you to say about how the qualities of Champaign, Champaign County, and the Region?
+
+Combining data on the demographic characteristics of three different geographic extents allows us to understand how Champaign demographics compare with the surrounding areas. The race tables show that Champaign has a slightly higher number of minority residents than the surrounding region, with 34% non-white residents versus 27% non-white and 24% non-white at the county and regional levels respectively. From the age tables, the city of Champaign also seems to have a higher population of residents between the ages of 20 to 44 than the county and region, which makes sense with the University of Illinois's location there. The city has a slightly lower population of residents aged 45 to 64 than the county and region as well. The city, county, and region all have between 60% to 65% of their population between 20 to 64 years old. 
